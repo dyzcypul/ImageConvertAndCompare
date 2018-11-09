@@ -1,0 +1,7 @@
+$localFiles = Get-ChildItem "C:\Users\smchow\Desktop\Minimaps Local" -Filter *.png;
+$amsFiles = Get-ChildItem "C:\Users\smchow\Desktop\Minimaps AMS" -Filter *.png;
+$diffFiles = "C:\Users\smchow\Desktop\Minimaps Diff" + $localFiles;
+
+for ($i=0; $i -lt $localFiles.Count; $i++) {
+    magick compare $localFiles[$i].FullName $amsFiles[$i].FullName $diffFiles
+};
