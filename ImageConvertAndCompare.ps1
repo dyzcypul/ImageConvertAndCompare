@@ -1,7 +1,7 @@
 $env:Path = $Env:Path,"C:\Program Files\ImageMagick-7.0.8-Q16"
 
 # 'reset loc' for recursive file scrapes
-Set-Location D:\compare\minimaps
+Set-Location D:\GhostHub\binboden\ImageConvertAndCompareSTDOUT
 
 Get-Location 
 
@@ -11,7 +11,8 @@ $currLoc = $startLoc
 if (-Not (Test-Path "$($currloc)\logs" -PathType Container)) {
 	New-Item logs -ItemType Directory
 }
-$logfile = "$($currLoc)\logs\converter_$($(Get-Date).ToString('yyyyddMMhhmm')).log"
+$logFile = "$($currLoc)\logs\converter_$($(Get-Date).ToString('yyyyddMMhhmm')).log"
+$diffLog = "$($currLoc)\logs\converter_diff_$($(Get-Date).ToString('yyyyddMMhhmm')).log"
 
 Function LogWrite
 {
@@ -20,17 +21,26 @@ Function LogWrite
    Add-content $logfile -value $logstring
 }
 
+Function diffLogWrite
+{
+   Param ([string]$logstring)
 
-"Converting from BLP to TGA"
-"__________________________"
+   Add-content $diffLog -value $logstring
+}
+
+
 LogWrite "Converting from BLP to TGA"
 LogWrite "__________________________"
-# Initial conversion from BLP to TGA using BLP.exe
-Start-Process cmd -Argument "/c blip.bat" -NoNewWindow -Wait | Out-Null
 
-# build TGA hashtables
+# Initial conversion from BLP to TGA using BLP.exe
+# Start-Process cmd -Argument "/c blip.bat" -NoNewWindow -Wait | Out-Null
+
+# build TGA hashtables (and sort for ease of troubleshooting and reading logs)
 (($valueTestTGA = @(Get-ChildItem -Recurse -Filter *.tga -Path '.\test' | Select-Object -ExpandProperty FullName)) -join ',') | Out-Null
+Sort-Object $valueTestTGA
+
 (($valueRefTGA = @(Get-ChildItem -Recurse -Filter *.tga -Path '.\ref' | Select-Object -ExpandProperty FullName)) -join ',') | Out-Null
+Sort-Object $valueRefTGA
 
 # building the hashtable of the 'non-reference' or 'files to be tested against reference'
 $testTGA = @{}
@@ -39,24 +49,24 @@ for ($i=0; $i -lt $valueTestTGA.Count; $i++) {
 	$keyParent = (Get-Item $currLoc).Parent.FullName
 	$regex = [regex]::escape("$($keyParent)\")
 	$thisLoc = $currLoc -replace $regex,""
-	$tgaVal = [io.path]::GetFileNameWithoutExtension($valueTestTGA[$i])
+	$tgaVal = [io.path]::GetFileNameWithoutExtension($valueTestTGA[$i]) -replace [regex]("_\d\dx"),""
 	$keyTestTGA = Join-Path "$($thisLoc)" $tgaVal
 	$testTGA["$keyTestTGA"] = $valueTestTGA[$i]
 	Write-Host "Added key: $($keyTestTGA) and value: $($valueTestTGA[$i]) to the Test file hashtable"
 	LogWrite "Added key: $($keyTestTGA) and value: $($valueTestTGA[$i]) to the Test file hashtable"
 }
-Clear-Host
+# Clear-Host
 LogWrite ""
 LogWrite ""
 
 # building the hashtable of the 'reference' files
 $refTGA = @{}
 for ($i=0; $i -lt $valueRefTGA.Count; $i++) {
-	$currLoc = (Get-Item -Path $valueTestTGA[$i]).DirectoryName
+	$currLoc = (Get-Item -Path $valueRefTGA[$i]).DirectoryName
 	$keyParent = (Get-Item $currLoc).Parent.FullName
 	$regex = [regex]::escape("$($keyParent)\")
 	$thisLoc = $currLoc -replace $regex,""
-	$tgaVal = [io.path]::GetFileNameWithoutExtension($valueRefTGA[$i])
+	$tgaVal = [io.path]::GetFileNameWithoutExtension($valueRefTGA[$i]) -replace [regex]("_\d\dx"),""
 	$keyRefTGA = Join-Path "$($thisLoc)" $tgaVal
 	$refTGA["$keyRefTGA"] = $valueRefTGA[$i]
 	Write-Host "Added key: $($keyRefTGA) and value: $($valueRefTGA[$i]) to the Reference file hashtable"
@@ -82,6 +92,7 @@ LogWrite "__________________________"
 Clear-Host
 LogWrite ""
 LogWrite ""
+
 # convert reference TGAs to PNGs using ImageMagick
 "Converting ref from TGA to PNG"
 "__________________________"
@@ -98,10 +109,15 @@ foreach ($key in $refTGA.GetEnumerator()) {
 Clear-Host
 LogWrite ""
 LogWrite ""
-# build PNG arrays
+
+# build PNG arrays (and sort for ease of troubleshooting and reading logs)
 Set-Location $startLoc
+
 (($valueTestPNG = @(Get-ChildItem -Recurse -Filter *.png -Path '.\test' | Select-Object -ExpandProperty FullName)) -join ',') | Out-Null
+Sort-Object $valueTestPNG
+
 (($valueRefPNG = @(Get-ChildItem -Recurse -Filter *.png -Path '.\ref' | Select-Object -ExpandProperty FullName)) -join ',') | Out-Null
+Sort-Object $valueRefPNG
 
 # build PNG hashes
 $testPNGs = @{}
@@ -110,11 +126,14 @@ for ($i=0; $i -lt $valueTestPNG.Count; $i++) {
 	$keyParent = (Get-Item $currLoc).Parent.FullName
 	$regex = [regex]::escape("$($keyParent)\")
 	$thisLoc = $currLoc -replace $regex,""
-	$pngVal = [io.path]::GetFileNameWithoutExtension($valueTestPNG[$i])
-	$keyTestPNG = Join-Path "$($thisLoc)" $pngVal
-	$testPNGs["$keyTestPNG"] = $valueTestPNG[$i]
-	Write-Host "Added key: $($keyTestPNG) and value: $($valueTestPNG[$i]) to the Test file hashtable"
-	LogWrite "Added key: $($keyTestPNG) and value: $($valueTestPNG[$i]) to the Test file hashtable"
+	$pngVal = $valueTestPNG[$i]
+	if ($valueTestPNG[$i].ToString() -match ".*(\d\d_\d\d_02x)") {
+		$pngVal = [io.path]::GetFileNameWithoutExtension($valueTestPNG[$i]) -replace [regex]("_\d\dx"),""
+		$keyTestPNG = Join-Path "$($thisLoc)" $pngVal
+		$testPNGs["$keyTestPNG"] = $valueTestPNG[$i]
+		Write-Host "Added key: $($keyTestPNG) and value: $($valueTestPNG[$i]) to the Test file hashtable"
+		LogWrite "Added key: $($keyTestPNG) and value: $($valueTestPNG[$i]) to the Test file hashtable"
+	}
 }
 
 Clear-Host
@@ -127,7 +146,7 @@ for ($i=0; $i -lt $valueRefPNG.Count; $i++) {
 	$keyParent = (Get-Item $currLoc).Parent.FullName
 	$regex = [regex]::escape("$($keyParent)\")
 	$thisLoc = $currLoc -replace $regex,""
-	$pngVal = [io.path]::GetFileNameWithoutExtension($valueRefPNG[$i])
+	$pngVal = [io.path]::GetFileNameWithoutExtension($valueRefPNG[$i]) -replace [regex]("_\d\dx"),""
 	$keyRefPNG = Join-Path "$($thisLoc)" $pngVal
 	$refPNGs["$keyRefPNG"] = $valueRefPNG[$i]
 	Write-Host "Added key: $($keyRefPNG) and value: $($valueRefPNG[$i]) to the Reference file hashtable"
@@ -147,27 +166,38 @@ LogWrite "__________________________"
 
 Get-Location
 $currLoc = 
+diffLogWrite "Evaluating file matches"
+diffLogWrite "_______________________"
+diffLogWrite ""
 
 foreach ($test in $testPNGs.GetEnumerator()) { 
 	Get-Location
 	if ($refPNGs.ContainsKey($test.Key)) {
 		$refVal = $refPNGs[$test.Key].ToString()
-	}
 		$testVal = $test.Value.ToString()
 		$currLoc = (Get-Item $testVal).Directory.FullName
+		
+		# create initial diffs directory
 		if (-Not (Test-Path "$($currloc)\diffs" -PathType Container)) {
 			New-Item "$($currloc)\diffs" -ItemType Directory
 			Write-Host "Created 'diffs' subdirectory in $($currLoc)"
 			Write-Host ""
 			Start-Sleep -Milliseconds 100
 		}
+		
 		$diffFiles = "$($currloc)\diffs\$($([io.path]::GetFileNameWithoutExtension($testVal)))_diff.jpg"
 		
-		magick compare $testVal $refVal $diffFiles
+		# normal output of all files
+		$matchVerbose = magick compare -verbose -metric AE -fuzz 5% $testVal $refVal $diffFiles *>&1
 		
-		$diffDest = (Split-Path -Path $test.Value).ToString()
+		diffLogWrite $matchVerbose
+
+		$diffDest = (Split-Path -Path $test.Value).ToString() -replace "_02x",""
+		
 		Write-Host "$($diffFiles) written to $($diffDest)\"
+		Write-Host ""
 		LogWrite "$($diffFiles) written to $($diffDest)\"
+		LogWrite ""
 
 		Set-Location -Path (Get-Item $testVal).Directory.FullName
 		$currLoc = Get-Location
@@ -203,3 +233,15 @@ foreach ($test in $testPNGs.GetEnumerator()) {
 			LogWrite ""	
 		}
 	}
+	ELSE {
+		$testKey = ($test.Key).ToString()
+		$testVMiss = $testPNGs[$testKey]
+		$testPath = (Split-Path -Path $testVMiss).ToString()
+
+		Write-Host "*** No matching file found for $($testVMiss) in the reference group at $($testPath.Replace("test","ref")). Skipping file. ***"
+		Write-Host ""
+		LogWrite "*** No matching file found for $($testVMiss) in the reference group at $($testPath.Replace("test","ref")). Skipping file. ***"
+		LogWrite ""
+		# Pause
+	}
+}
