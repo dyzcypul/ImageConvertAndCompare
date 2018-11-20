@@ -1,7 +1,7 @@
 $env:Path = $Env:Path,"C:\Program Files\ImageMagick-7.0.8-Q16"
 
 # 'reset loc' for recursive file scrapes
-Set-Location D:\GhostHub\binboden\ImageConvertAndCompareSTDOUT
+Set-Location D:\minimaps
 
 Get-Location 
 
@@ -28,12 +28,11 @@ Function diffLogWrite
    Add-content $diffLog -value $logstring
 }
 
-
 LogWrite "Converting from BLP to TGA"
 LogWrite "__________________________"
 
 # Initial conversion from BLP to TGA using BLP.exe
-# Start-Process cmd -Argument "/c blip.bat" -NoNewWindow -Wait | Out-Null
+Start-Process cmd -Argument "/c blip.bat" -NoNewWindow -Wait | Out-Null
 
 # build TGA hashtables (and sort for ease of troubleshooting and reading logs)
 (($valueTestTGA = @(Get-ChildItem -Recurse -Filter *.tga -Path '.\test' | Select-Object -ExpandProperty FullName)) -join ',') | Out-Null
